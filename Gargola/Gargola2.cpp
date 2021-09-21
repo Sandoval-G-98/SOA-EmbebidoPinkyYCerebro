@@ -3,7 +3,7 @@
 
 // Habilitacion de debug para la impresion por el puerto serial ...
 //----------------------------------------------
-#define SERIAL_DEBUG_ENABLED 0
+#define SERIAL_DEBUG_ENABLED 1
 
 #if SERIAL_DEBUG_ENABLED
 #define DebugPrint(str)      \
@@ -110,7 +110,7 @@ transition state_table[MAX_STATES][MAX_EVENTS] =
         {none,  turn_on,     error,          error,          error,          error,            error},  // state ST_OFF
         {none,  error,       turn_off_1,     got_day,        got_dark_1,     error,            error},  // state ST_INIT
         {none,  error,       turn_off_1,     none,           got_dark_1,     none,             none},   // state ST_IN_DAY
-        {none,  error,       turn_off_1,     got_day ,       none,           lying_down,       none},   // state ST_AT_NIGHT
+        {none,  error,       turn_off_1,     got_day ,       none,           lying_down,       none/*get_up*/}, // state ST_AT_NIGHT
         {none,  error,       turn_off_2,     got_day,        got_dark_2,     error,            get_up}  // state ST_IN_BED
     //EV_DUMMY, EV_TURN_ON  , EV_TURN_OFF  , EV_IS_DAY      , EV_AT_NIGHT ,  EV_LYING_DOWN  , EV_GET_UP
 };
@@ -233,7 +233,7 @@ void turn_on_neo_ring()
     laser.show();
 }
 void turn_off_neo_ring()
-{   
+{
     laser.clear();
     laser.setPixelColor(LED_0, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
     laser.setPixelColor(LED_1, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
@@ -275,12 +275,18 @@ int read_ambient_light_sensor(){
 
 /// Funciones qeu verifican los sensores y setean estado
 bool is_lying_down(){
+
+
+
   int value = read_force_sensor();
   bool lying_down = false;
     if(value > MIN_VALUE_FORCE_SENSOR){
       new_event = EV_LYING_DOWN;
       lying_down = true;
     } 
+    // else {
+    //   new_event = EV_AT_NIGHT; 
+    // }
 
   return lying_down;
 }
@@ -370,9 +376,24 @@ void maquina_estados_gargola()
 
     if ((new_event >= 0) && (new_event < MAX_EVENTS) && (current_state >= 0) && (current_state < MAX_STATES))
     {
-        state_table[current_state][new_event]();
-    }
+        // bool flag = new_event != EV_DUMMY;
+        // if (flag)
+        // {
+        //     Serial.println("-----------------------------------------");
+        //     Serial.println("Estado anterior: " + states_s[current_state]); 
+        //     Serial.println("Evento: " + events_s[new_event]);
+        // }
 
+        state_table[current_state][new_event]();
+
+        // if(flag){
+        //     Serial.println("Estado actual: " + states_s[current_state]);
+        // }
+    }
+    else
+    {
+        //DebugPrintEstado(states_s[ST_ERROR], events_s[EV_UNKNOW]);
+    }
     // Consumo el evento...
     new_event = EV_DUMMY;
 }
