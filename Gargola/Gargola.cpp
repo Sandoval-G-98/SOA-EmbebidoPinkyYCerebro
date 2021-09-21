@@ -40,11 +40,13 @@ const int force_sensor = A0;
 const int neo_ring = 8;
 const int ambient_light_sensor = A1;
 
-// Bandera de es noche o es dia 
-bool isRangeNight = false;
+// Temporizadores
+#define TMP_EVENTS 50
+unsigned long previous_time;
+unsigned long actual_time;
 
 // Puerto serial
-#define PUERTO_SERIAL 9600
+#define SERIAL_PORT 9600
 // IRS receptor
 IRrecv irrecv(recv_pin);
 decode_results results;
@@ -52,11 +54,11 @@ decode_results results;
 #define IR_SENSOR_DESACTIVE 0xFD40BF
 #define MIN_VALUE_FORCE_SENSOR 0
 #define MIN_VALUE_NIGHT 700
-#define NUMLASER 12
-#define LASERINI 1
-#define AMARILLO 255
-#define AZUL 255
-#define SINCOLOR 0
+#define NUM_LASER 12
+#define _initLASER 1
+#define YELLOW 255
+#define BLUE 255
+#define WHITE 0
 #define LED_0 0
 #define LED_1 1
 #define LED_2 2
@@ -70,7 +72,7 @@ decode_results results;
 #define LED_10 10
 #define LED_11 11
 //
-Adafruit_NeoPixel laser(NUMLASER, neo_ring, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel laser(NUM_LASER, neo_ring, NEO_GRB + NEO_KHZ800);
 // Argumento 1 = Número de pixeles encadenados
 // Argumento 2 = Número del pin de Arduino utilizado con pin de datos
 // Argumento 3 = Banderas de tipo de pixel:
@@ -107,11 +109,11 @@ String events_s[] = {"EV_DUMMY", "EV_TURN_ON", "EV_TURN_OFF", "EV_IS_DAY", "EV_A
 typedef void (*transition)();
 transition state_table[MAX_STATES][MAX_EVENTS] =
     {
-        {none,  turn_on,     error,          error,          error,          error,            error},  // state ST_OFF
-        {none,  error,       turn_off_1,     got_day,        got_dark_1,     error,            error},  // state ST_INIT
-        {none,  error,       turn_off_1,     none,           got_dark_1,     none,             none},   // state ST_IN_DAY
-        {none,  error,       turn_off_1,     got_day ,       none,           lying_down,       none},   // state ST_AT_NIGHT
-        {none,  error,       turn_off_2,     got_day,        got_dark_2,     error,            get_up}  // state ST_IN_BED
+        {none,  turn_on,     error,          error,          error,          error,            error},    // state ST_OFF
+        {none,  error,       turn_off_1,     got_day,        got_dark_1,     lying_down,       get_up},   // state ST_INIT
+        {none,  error,       turn_off_1,     got_day,        got_dark_1,     lying_down,       get_up},   // state ST_IN_DAY
+        {none,  error,       turn_off_1,     got_day ,       got_dark_1,     lying_down,       get_up},   // state ST_AT_NIGHT
+        {none,  error,       turn_off_2,     got_day,        got_dark_2,     lying_down,       get_up}    // state ST_IN_BED
     //EV_DUMMY, EV_TURN_ON  , EV_TURN_OFF  , EV_IS_DAY      , EV_AT_NIGHT ,  EV_LYING_DOWN  , EV_GET_UP
 };
 
@@ -185,8 +187,6 @@ void turn_off_2()
 
 void lying_down()
 {
-    // Si es de noche, y se acostó, prendemos todos los actuadores del sistema.
-    turn_on_all();
     current_state = ST_IN_BED; //ST_AT_NIGHT
 }
 
@@ -194,7 +194,7 @@ void get_up()
 {
     //Deberia de apagarse todos los actuadores (PIEZO, RING, VIBRADOR)
     turn_off_all();
-    current_state = ST_AT_NIGHT;
+    current_state = ST_INIT;
 }
 
 void turn_on_all ()
@@ -218,35 +218,35 @@ void turn_off_all ()
 void turn_on_neo_ring()
 {
     laser.clear();
-    laser.setPixelColor(LED_0, laser.Color(AMARILLO, AMARILLO, SINCOLOR));
-    laser.setPixelColor(LED_1, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_2, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_3, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_4, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_5, laser.Color(AMARILLO, AMARILLO, SINCOLOR));
-    laser.setPixelColor(LED_6, laser.Color(AMARILLO, AMARILLO, SINCOLOR));
-    laser.setPixelColor(LED_7, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_8, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_9, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_10, laser.Color(SINCOLOR, SINCOLOR, AZUL));
-    laser.setPixelColor(LED_11, laser.Color(AMARILLO, AMARILLO, SINCOLOR));
+    laser.setPixelColor(LED_0, laser.Color(YELLOW, YELLOW, WHITE));
+    laser.setPixelColor(LED_1, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_2, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_3, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_4, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_5, laser.Color(YELLOW, YELLOW, WHITE));
+    laser.setPixelColor(LED_6, laser.Color(YELLOW, YELLOW, WHITE));
+    laser.setPixelColor(LED_7, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_8, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_9, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_10, laser.Color(WHITE, WHITE, BLUE));
+    laser.setPixelColor(LED_11, laser.Color(YELLOW, YELLOW, WHITE));
     laser.show();
 }
 void turn_off_neo_ring()
 {   
     laser.clear();
-    laser.setPixelColor(LED_0, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_1, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_2, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_3, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_4, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_5, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_6, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_7, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_8, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_9, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_10, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
-    laser.setPixelColor(LED_11, laser.Color(SINCOLOR, SINCOLOR, SINCOLOR));
+    laser.setPixelColor(LED_0, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_1, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_2, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_3, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_4, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_5, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_6, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_7, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_8, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_9, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_10, laser.Color(WHITE, WHITE, WHITE));
+    laser.setPixelColor(LED_11, laser.Color(WHITE, WHITE, WHITE));
     laser.show();
 }
 
@@ -274,55 +274,36 @@ int read_ambient_light_sensor(){
 ////////----------------------------------
 
 /// Funciones qeu verifican los sensores y setean estado
-bool is_lying_down(){
-  int value = read_force_sensor();
-  bool lying_down = false;
+void check_force_sensor(){
+    
+    int value = read_force_sensor();
     if(value > MIN_VALUE_FORCE_SENSOR){
       new_event = EV_LYING_DOWN;
-      lying_down = true;
+      return;
     } 
 
-  return lying_down;
+    new_event = EV_GET_UP;
 }
 
-bool is_get_up(){
 
-  int value = read_force_sensor();
-  bool get_up = false;
-    if(value == MIN_VALUE_FORCE_SENSOR){
-      new_event = EV_GET_UP;
-      get_up = true;
-    } 
-  
-  return get_up;
-}
-
-bool is_at_night(){
+void check_ambient_ligh_sensor(){
 
   int value = read_ambient_light_sensor(); 
-  bool at_night = false; 
-  bool isNight = value >= MIN_VALUE_NIGHT ? true: false;
-    if(isNight && !isRangeNight){
-        at_night = true;
-        isRangeNight = true;
+    if(value >= MIN_VALUE_NIGHT){
         new_event = EV_AT_NIGHT;
-    } else if (!isNight) {
-        at_night = true;
-        isRangeNight = false;
-        new_event = EV_IS_DAY;
-    }
+        return;
+    } 
 
-  return at_night;
+    new_event = EV_IS_DAY;
 }
 
-bool is_ir_sensor_turn_on()
+bool check_press_ir_sensor()
 {
     //decode_results results;
     bool isTurn = false;
     unsigned int value = 0;
     if (irrecv.decode(&results)) //irrecv.decode(&results) returns true if anything is recieved, and stores info in varible results
     {
-  
         irrecv.resume();
         // value = results.value; //Get the value of results as an unsigned int, so we can use switch case
         if (results.value == IR_SENSOR_ACTIVATE) //boton rojo
@@ -342,20 +323,23 @@ bool is_ir_sensor_turn_on()
 }
 ////////----------------------------------
 
+int counter = 0;
 /// Obtencion de eventos
 void get_new_event()
-{
-    if(is_ir_sensor_turn_on()){
+{   
+    if(check_press_ir_sensor()){
         return;
     } 
 
-    if(is_at_night()){
-        return;
-    }
-
-    if(is_lying_down()){
-        return;
-    } else if(is_get_up()){
+    actual_time = millis();
+    if ((actual_time - previous_time) > TMP_EVENTS)
+    {
+        if(counter%2 == 0)
+            check_ambient_ligh_sensor();
+        else 
+            check_force_sensor();
+        counter++;
+        previous_time = actual_time;
         return;
     }
 	
@@ -364,7 +348,7 @@ void get_new_event()
 ////////----------------------------------
 
 /// Lanzamos los eventos que se obtuvieron del get_new_event
-void maquina_estados_gargola()
+void gargola_state_machine()
 {
     get_new_event();
 
@@ -380,29 +364,30 @@ void maquina_estados_gargola()
 
 
 /// Inicializador
-void init_(){
+void _init(){
     pinMode(led_red, OUTPUT);
     pinMode(led_green, OUTPUT);
     pinMode(vibration_motor, OUTPUT); 
     pinMode(piezo, OUTPUT);
     update_led_red(HIGH);
-    Serial.begin(PUERTO_SERIAL);
+    Serial.begin(SERIAL_PORT);
     Serial.println("-----------------------------------------");
     Serial.println("Comienzo de sistema");
     irrecv.enableIRIn();
-    Serial.println("Esperando inicio señal de inicio...");
+    Serial.println("Esperando inicio senal de inicio...");
     Serial.println("-----------------------------------------");
+    previous_time = millis();
     current_state = ST_OFF;
 }
 
 /// Funciones arduino
 void setup()
 {
-    init_();
+    _init();
 }
 
 void loop()
 {
-    maquina_estados_gargola();
+    gargola_state_machine();
 }
 ////////----------------------------------
