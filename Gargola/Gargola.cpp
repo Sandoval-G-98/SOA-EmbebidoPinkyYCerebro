@@ -80,7 +80,7 @@ Adafruit_NeoPixel laser(NUM_LASER, neo_ring, NEO_GRB + NEO_KHZ800);
 // NEO_GRB       Pixels are wired for GRB bitstream (most NeoPixel products)
 
 // Estados y eventos
-#define MAX_STATES 5
+#define MAX_STATES 6
 #define MAX_EVENTS 7
 enum states
 {
@@ -90,7 +90,7 @@ enum states
     ST_AT_NIGHT,
     ST_IN_BED
 } current_state;
-String states_s[] = {"ST_OFF", "ST_INIT", "ST_IN_DAY", "ST_AT_NIGHT", "ST_IN_BED"};
+String states_s[] = {"ST_OFF", "ST_INIT", "ST_IN_DAY", "ST_AT_NIGHT", "ST_IN_BED_AT_NIGHT","ST_IN_BED_IN_DAY"};
 
 enum events
 {
@@ -109,12 +109,13 @@ String events_s[] = {"EV_DUMMY", "EV_TURN_ON", "EV_TURN_OFF", "EV_IS_DAY", "EV_A
 typedef void (*transition)();
 transition state_table[MAX_STATES][MAX_EVENTS] =
     {
-        {none,  turn_on,     error,          error,          error,          error,            error},    // state ST_OFF
-        {none,  error,       turn_off_1,     got_day,        got_dark_1,     lying_down,       get_up},   // state ST_INIT
-        {none,  error,       turn_off_1,     got_day,        got_dark_1,     lying_down,       get_up},   // state ST_IN_DAY
-        {none,  error,       turn_off_1,     got_day ,       got_dark_1,     lying_down,       get_up},   // state ST_AT_NIGHT
-        {none,  error,       turn_off_2,     got_day,        got_dark_2,     lying_down,       get_up}    // state ST_IN_BED
-    //EV_DUMMY, EV_TURN_ON  , EV_TURN_OFF  , EV_IS_DAY      , EV_AT_NIGHT ,  EV_LYING_DOWN  , EV_GET_UP
+        {none,  turn_on,     error,        error,          error,          error,            error},   // state ST_OFF
+        {none,  error,       turn_off,     got_day,        got_dark,       none,             none},   // state ST_INIT
+        {none,  error,       turn_off,     none,           got_dark,       lying_down_1,     none},   // state ST_IN_DAY
+        {none,  error,       turn_off,     got_day,        none,           lying_down_2,     none},   // state ST_AT_NIGHT
+        {none,  error,       turn_off,     got_day,        none,           none,             get_up},   // state ST_IN_BED_AT_NIGHT
+        {none,  error,       turn_off,     none,           got_dark,       none,             get_up}   // state ST_IN_BED_IN_DAY
+    //EV_DUMMY, EV_TURN_ON  , EV_TURN_OFF  , EV_IS_DAY    , EV_AT_NIGHT ,  EV_LYING_DOWN  , EV_GET_UP
 };
 
 /// El error nos indica 
@@ -154,29 +155,14 @@ void turn_on()
     current_state = ST_INIT;
 }
 
-void got_dark_1()
+
+void got_dark()
 {
-    // Escuchar el sensor Force
     current_state = ST_AT_NIGHT;
 }
 
-void got_dark_2()
-{
-    //Si la persona ya se encontraba acostado antes que se haga de noche
-    //esta funcion escucha al sensor de ambiente, y si oscurece, se setean los actuadores.
-    turn_on_all();
-    current_state = ST_IN_BED;
-}
 
-void turn_off_1()
-{
-    //No hay sensores activos, por lo tanto solo apagamos el sistema.
-    update_led_red(HIGH);
-    update_led_green(LOW);
-    current_state = ST_OFF;
-}
-
-void turn_off_2()
+void turn_off()
 {
     //Hay sensores activos, por lo tanto, antes de apagar el sistema seteamos los valores de los actuadores.
     turn_off_all();
@@ -185,9 +171,14 @@ void turn_off_2()
     current_state = ST_OFF;
 }
 
-void lying_down()
+void lying_down_1()
 {
-    current_state = ST_IN_BED; //ST_AT_NIGHT
+    current_state = ST_IN_BED_IN_DAY; 
+}
+
+void lying_down_2(){
+    turn_on_all();
+    current_state = ST_IN_BED_AT_NIGHT;
 }
 
 void get_up()
